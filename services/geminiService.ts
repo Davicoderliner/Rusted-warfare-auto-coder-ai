@@ -88,19 +88,35 @@ export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | 
                 *   **EXAMPLE:** If \`unitName\` is "artillery_mech", the INI file **MUST** contain \`name: artillery_mech\` under \`[core]\`.
                 *   **ERROR CAUSE:** Failing this rule causes the "Could not find name..." error. You are responsible for preventing this.
 
-            3.  **INI File \`[graphics]\` and Image Consistency:**
+            3.  **INI File Formatting:**
+                *   Each section header (e.g., \`[core]\`, \`[graphics]\`) MUST be on its own line.
+                *   Underneath a section header, every single \`key: value\` pair MUST be on its own separate line.
+                *   **EXAMPLE (Correct):**
+                    \`\`\`ini
+                    [core]
+                    name: my_unit
+                    maxHp: 100
+                    \`\`\`
+                *   **EXAMPLE (Incorrect and will cause errors):**
+                    \`\`\`ini
+                    [core]name: my_unitmaxHp: 100
+                    \`\`\`
+                *   **ERROR CAUSE:** Incorrect formatting prevents the game from parsing the file. You are responsible for ensuring correct line breaks.
+
+            4.  **INI File \`[graphics]\` and Image Consistency:**
                 *   For every image filename you write in the \`[graphics]\` section (e.g., \`image: base.png\`), you MUST create a corresponding entry in the \`imagePrompts\` JSON array.
                 *   The \`imageName\` in the JSON MUST be an **EXACT, case-sensitive match** to the filename in the INI.
                 *   **EXAMPLE:** If INI has \`image_turret: turret_heavy.png\`, JSON must have \`{ "imageName": "turret_heavy.png", ... }\`.
                 *   **ERROR CAUSE:** Any mismatch causes the "Could not find image..." error. You are responsible for preventing this.
 
-            4.  **Sprite Style:**
+            5.  **Sprite Style:**
                 *   All generated sprites must be **2D pixel art** from a **strict top-down orthographic perspective**. The background must be black or transparent.
 
-            5.  **Final Verification:**
+            6.  **Final Verification:**
                 *   Before outputting JSON, mentally perform this check:
                     1. Is \`[core]\` \`name\` identical to \`unitName\`?
-                    2. Is every image file in \`[graphics]\` perfectly mirrored by an \`imageName\` in \`imagePrompts\`?
+                    2. Is the INI file formatted with correct line breaks?
+                    3. Is every image file in \`[graphics]\` perfectly mirrored by an \`imageName\` in \`imagePrompts\`?
                 *   Your output must be a single, minified JSON object matching the required schema. No extra text or markdown.
         `;
 
@@ -187,15 +203,26 @@ User's request: "${userPrompt || 'Create a unit based on the image.'}"
     *   The value of this \`name\` key MUST be an **EXACT** match for the \`unitName\` from rule 1.
     *   **ERROR CAUSE:** A mismatch causes the "Could not find name..." error. You must prevent this.
 
-3.  **INI File \`[graphics]\` Section:**
+3.  **INI File Formatting:**
+    *   Each section header (e.g., \`[core]\`, \`[graphics]\`) MUST be on its own line.
+    *   Underneath a section header, every single \`key: value\` pair MUST be on its own separate line. This formatting is MANDATORY.
+    *   **EXAMPLE (Correct):**
+        \`\`\`ini
+        [graphics]
+        image: image.png
+        \`\`\`
+    *   **EXAMPLE (Incorrect):** \`[graphics]image: image.png\`
+
+4.  **INI File \`[graphics]\` Section:**
     *   The user has provided the main sprite. This file will be named \`image.png\`.
     *   You MUST include the line \`image: image.png\` in the \`[graphics]\` section.
     *   You MUST NOT define any other images (like \`image_turret\`, \`image_wreak\`, etc.). Only use the single provided image.
 
-4.  **Final Verification:**
+5.  **Final Verification:**
     *   Before outputting JSON, mentally perform this check:
         1. Is \`[core]\` \`name\` identical to \`unitName\`?
-        2. Does \`[graphics]\` contain exactly \`image: image.png\` and no other image definitions?
+        2. Is the INI file formatted with correct line breaks?
+        3. Does \`[graphics]\` contain exactly \`image: image.png\` and no other image definitions?
     *   Your output must be a single, minified JSON object matching the required schema. No extra text or markdown.
         `
         };
@@ -255,7 +282,15 @@ ${currentCode}
 **User's Instruction:**
 "${instruction}"
 
-Your task is to return ONLY the complete, modified .ini code. Do not add any explanations, comments, or markdown formatting like \`\`\`ini. Just return the raw text of the full, updated code. Ensure the format is valid Rusted Warfare INI format, using \`key: value\` pairs. Crucially, ensure the 'name' key under the '[core]' section is preserved and remains valid.
+Your task is to return ONLY the complete, modified .ini code. Do not add any explanations, comments, or markdown formatting like \`\`\`ini. Just return the raw text of the full, updated code.
+
+**CRITICAL FORMATTING RULES:**
+1.  Ensure the format is a valid Rusted Warfare INI format.
+2.  Each section header (e.g., \`[core]\`) must be on its own line.
+3.  Every \`key: value\` pair must be on its own separate line.
+4.  Crucially, ensure the 'name' key under the '[core]' section is preserved and remains valid.
+
+Failing to follow these formatting rules will cause the game to crash.
         `;
         
         const response = await ai.models.generateContent({
