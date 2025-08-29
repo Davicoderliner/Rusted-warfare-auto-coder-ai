@@ -125,6 +125,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ code, isLoading, onEdit 
                         onClick={handleEditSubmit}
                         disabled={isLoading || !editInstruction.trim()}
                         className="p-2 text-gray-400 hover:text-cyan-400 disabled:text-gray-600 disabled:cursor-not-allowed transition-colors"
+                        title="Send edit instruction"
                     >
                         <Send className="w-5 h-5"/>
                     </button>

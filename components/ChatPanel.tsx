@@ -74,6 +74,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                     onClick={onImageRemove}
                     className="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-1 hover:bg-red-500 transition-colors"
                     aria-label="Remove image"
+                    title="Remove image"
                 >
                     <X className="w-4 h-4" />
                 </button>
