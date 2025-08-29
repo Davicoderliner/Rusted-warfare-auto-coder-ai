@@ -1,16 +1,41 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# ⚙️ Rusted Warfare Auto Coder AI  
 
-# Run and deploy your AI Studio app
+🚀 An **AI-powered auto-coder** built for the game *Rusted Warfare*.  
+This project uses **Gemini 2.5 Pro** to automatically generate and manage code/files for mods, automation, and experimentation.  
 
-This contains everything you need to run your app locally.
+⚠️ **Note:** This project is still **in development** but is fully **open source** — contributions and feedback are welcome!  
 
-View your app in AI Studio: https://ai.studio/apps/drive/110q--SWkcezndgNpLcQLd1lzg7DAY-MG
+---
 
-## Run Locally
+## ✨ Features (Planned & In Progress)
+- 🤖 **AI-Generated Code:** Uses Gemini 2.5 Pro to generate Rusted Warfare scripts and files automatically.  
+- 🛠️ **Customizable:** Configure how the AI generates and structures files.  
+- 🌐 **Web-Based Interface:** User-friendly website for generating and editing code directly.  
+- 📂 **Auto File Management:** Handles file creation, updates, and organization seamlessly.  
 
-**Prerequisites:**  Node.js
+---
+
+## 🏗️ Project Status
+- 🔨 Currently under **active development**.  
+- 🧪 Expect bugs, missing features, and experimental code.  
+- ✅ Open to community contributions to shape the project.  
+
+---
+
+## 📦 Installation / Setup
+Since this project is still evolving, setup instructions may change.  
+Basic steps:  
+
+```bash
+# Clone the repo
+git clone https://github.com/<your-username>/rusted-warfare-auto-coder-ai.git
+cd rusted-warfare-auto-coder-ai
+
+# Install dependencies (update this when ready)
+npm install   # or pip install -r requirements.txt depending on stack
+
+# Run development server
+npm run dev   # or appropriate start command
 
 
 1. Install dependencies:
