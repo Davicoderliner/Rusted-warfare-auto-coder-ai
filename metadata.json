@@ -1,0 +1,5 @@
+{
+  "name": "Rusted Warfare Auto-Coder",
+  "description": "An AI-powered assistant to generate Rusted Warfare unit .ini code and sprites from text prompts. Describe your desired unit in the chat, and the AI will generate both the code and a visual concept.",
+  "requestFramePermissions": []
+}
