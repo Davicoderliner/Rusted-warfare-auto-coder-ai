@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import type { GeneratedUnit } from '../types';
 
@@ -8,6 +7,57 @@ if (!API_KEY) {
     throw new Error("API_KEY environment variable not set");
 }
 const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+/**
+ * Ensures the INI content has a valid [core] section with the correct 'name' key.
+ * This is a programmatic fix to prevent the "Could not find name..." error in Rusted Warfare.
+ * @param iniContent The raw INI content from the AI.
+ * @param unitName The expected unit name.
+ * @returns The corrected INI content.
+ */
+const ensureCorrectUnitNameInIni = (iniContent: string, unitName: string): string => {
+    const lines = iniContent.split('\n');
+    let coreSectionIndex = -1;
+    let nameKeyIndex = -1;
+    let inCoreSection = false;
+
+    // Find the [core] section and the name key
+    for (let i = 0; i < lines.length; i++) {
+        const trimmedLine = lines[i].trim().toLowerCase();
+        if (trimmedLine === '[core]') {
+            coreSectionIndex = i;
+            inCoreSection = true;
+        } else if (inCoreSection) {
+            // Stop looking if we hit another section
+            if (trimmedLine.startsWith('[')) {
+                inCoreSection = false;
+                continue;
+            }
+            if (trimmedLine.startsWith('name:')) {
+                nameKeyIndex = i;
+                break; // Found it, no need to search further in this section
+            }
+        }
+    }
+
+    const correctNameLine = `name: ${unitName}`;
+
+    if (coreSectionIndex !== -1) {
+        if (nameKeyIndex !== -1) {
+            // Found the name key, replace the line to ensure it's correct
+            lines[nameKeyIndex] = correctNameLine;
+        } else {
+            // Name key not found, insert it right after the [core] section line
+            lines.splice(coreSectionIndex + 1, 0, correctNameLine);
+        }
+    } else {
+        // [core] section is missing entirely. Prepend it.
+        return `[core]\n${correctNameLine}\n\n${iniContent}`;
+    }
+
+    return lines.join('\n');
+};
+
 
 const unitGenerationResponseSchema = {
     type: Type.OBJECT,
@@ -25,7 +75,7 @@ const unitGenerationResponseSchema = {
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    imageName: { type: Type.STRING, description: "The filename for the image, e.g., 'image.png', 'image_turret.png'." },
+                    imageName: { type: Type.STRING, description: "The filename for the image, e.g., 'heavy_tank.png', 'heavy_tank_turret.png'." },
                     prompt: { type: Type.STRING, description: "A visually descriptive prompt to generate this specific sprite." }
                 },
                 required: ["imageName", "prompt"],
@@ -44,7 +94,7 @@ const unitGenerationFromImageResponseSchema = {
         },
         iniFileContent: {
             type: Type.STRING,
-            description: "The complete Rusted warfare .ini file content for the unit. The [graphics] section must reference 'image: image.png' as the main sprite, as it is provided by the user."
+            description: "The complete Rusted warfare .ini file content for the unit. The [graphics] section must reference the main sprite using the unit's name, e.g., 'image: [unitName].png'."
         },
     },
     required: ["unitName", "iniFileContent"],
@@ -53,6 +103,7 @@ const unitGenerationFromImageResponseSchema = {
 
 export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | null> => {
     try {
+        // FIX: Replaced backticks with single quotes for inline code formatting within the prompt to avoid parser errors.
         const prompt = `
             You are an expert Rusted Warfare modding assistant. You have been provided with an exhaustive reference document and several advanced examples for the Rusted Warfare modding API. Your task is to use this deep knowledge to generate a complete, creative, and functional unit package that is GUARANTEED to load without errors.
 
@@ -62,35 +113,35 @@ export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | 
             You have detailed information on all INI sections. Use this knowledge to go beyond basic units and create something that feels unique and expertly crafted based on the user's prompt.
 
             **Advanced Techniques Learned from Examples:**
-            - **Transformations & States:** Units can have multiple states (e.g., flying, submerged). These are handled with \`[action_...]\` sections using \`convertTo: new_unit_name\`. The different states are defined in separate .ini files (\`new_unit_name.ini\`).
-            - **Inheritance:** Secondary state files (\`_underwater.ini\`, \`_transition.ini\`) can use \`copyFrom: base_unit.ini\` to inherit all properties from a base unit and only override what's necessary, like \`[movement]\` or \`[attack]\` sections.
-            - **Animations:** Use \`[animation_NAME]\` sections to define complex movements for cosmetic parts during actions (like diving or surfacing). Link these to actions using \`whenBuilding_playAnimation: NAME\`.
-            - **Cosmetic Parts:** Use \`[arm_#]\` and \`[leg_#]\` to attach non-functional, animated parts to a unit for visual appeal.
-            - **Complex Projectiles:** Projectiles can be highly customized with effects (\`lightingEffect\`), custom hit effects (\`explodeEffect:CUSTOM:...\`), and specific damage multipliers (\`shieldDamageMultiplier\`, \`buildingDamageMultiplier\`).
-            - **Custom Effects:** Define visual effects using \`[effect_NAME]\` sections to create unique visuals for weapons, movement, and explosions.
+            - **Transformations & States:** Units can have multiple states (e.g., flying, submerged). These are handled with '[action_...]' sections using 'convertTo: new_unit_name'. The different states are defined in separate .ini files ('new_unit_name.ini').
+            - **Inheritance:** Secondary state files ('_underwater.ini', '_transition.ini') can use 'copyFrom: base_unit.ini' to inherit all properties from a base unit and only override what's necessary, like '[movement]' or '[attack]' sections.
+            - **Animations:** Use '[animation_NAME]' sections to define complex movements for cosmetic parts during actions (like diving or surfacing). Link these to actions using 'whenBuilding_playAnimation: NAME'.
+            - **Cosmetic Parts:** Use '[arm_#]' and '[leg_#]' to attach non-functional, animated parts to a unit for visual appeal.
+            - **Complex Projectiles:** Projectiles can be highly customized with effects ('lightingEffect'), custom hit effects ('explodeEffect:CUSTOM:...'), and specific damage multipliers ('shieldDamageMultiplier', 'buildingDamageMultiplier').
+            - **Custom Effects:** Define visual effects using '[effect_NAME]' sections to create unique visuals for weapons, movement, and explosions.
 
             **Task Application:**
             While your current task is to generate a single unit package (one primary .ini file and its assets), you MUST use this advanced knowledge to make your generated units far more interesting and complex. For example:
-            - If a user asks for a versatile unit, add an \`[action_...]\` even if it doesn't \`convertTo\` another unit; maybe it provides a temporary boost or changes weapon state.
-            - Add \`[arm_#]\` parts to mechs and jets to make them visually dynamic.
-            - Create detailed custom projectiles and effects instead of using simple \`directDamage\`.
+            - If a user asks for a versatile unit, add an '[action_...]' even if it doesn't 'convertTo' another unit; maybe it provides a temporary boost or changes weapon state.
+            - Add '[arm_#]' parts to mechs and jets to make them visually dynamic.
+            - Create detailed custom projectiles and effects instead of using simple 'directDamage'.
             - The goal is to produce a mod file that feels expertly crafted and uses the full potential of the modding engine.
 
             **Non-Negotiable Rules to Prevent Errors:**
 
-            1.  **Unit Identifier (\`unitName\`):**
-                *   Create a unique \`unitName\` for the unit (e.g., 'heavy_tank').
-                *   It MUST be \`lowercase_snake_case\`. No spaces, no capitals. This is used for the folder, .ini file, and the core \`name\`.
+            1.  **Unit Identifier ('unitName'):**
+                *   Create a unique 'unitName' for the unit (e.g., 'heavy_tank').
+                *   It MUST be 'lowercase_snake_case'. No spaces, no capitals. This is used for the folder, .ini file, and the core 'name'.
 
-            2.  **INI File \`[core]\` Section:**
-                *   This section MUST contain a \`name\` key.
-                *   The value of this \`name\` key MUST be an **EXACT** match for the \`unitName\` from step 1.
-                *   **EXAMPLE:** If \`unitName\` is "artillery_mech", the INI file **MUST** contain \`name: artillery_mech\` under \`[core]\`.
-                *   **ERROR CAUSE:** Failing this rule causes the "Could not find name..." error. You are responsible for preventing this.
+            2.  **INI File '[core]' Section (ABSOLUTELY CRITICAL):**
+                *   This section MUST contain a 'name' key.
+                *   The value of this 'name' key MUST be an **EXACT** match for the 'unitName' from step 1.
+                *   **EXAMPLE:** If 'unitName' is "artillery_mech", the INI file **MUST** contain 'name: artillery_mech' under '[core]'.
+                *   **THIS IS THE MOST COMMON CAUSE OF ERRORS.** The game will show "Could not find name in configuration file" if you fail this. Double-check your output to ensure this rule is followed perfectly.
 
             3.  **INI File Formatting:**
-                *   Each section header (e.g., \`[core]\`, \`[graphics]\`) MUST be on its own line.
-                *   Underneath a section header, every single \`key: value\` pair MUST be on its own separate line.
+                *   Each section header (e.g., '[core]', '[graphics]') MUST be on its own line.
+                *   Underneath a section header, every single 'key: value' pair MUST be on its own separate line.
                 *   **EXAMPLE (Correct):**
                     \`\`\`ini
                     [core]
@@ -103,10 +154,10 @@ export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | 
                     \`\`\`
                 *   **ERROR CAUSE:** Incorrect formatting prevents the game from parsing the file. You are responsible for ensuring correct line breaks.
 
-            4.  **INI File \`[graphics]\` and Image Consistency:**
-                *   For every image filename you write in the \`[graphics]\` section (e.g., \`image: base.png\`), you MUST create a corresponding entry in the \`imagePrompts\` JSON array.
-                *   The \`imageName\` in the JSON MUST be an **EXACT, case-sensitive match** to the filename in the INI.
-                *   **EXAMPLE:** If INI has \`image_turret: turret_heavy.png\`, JSON must have \`{ "imageName": "turret_heavy.png", ... }\`.
+            4.  **INI File '[graphics]' and Image Consistency:**
+                *   The main sprite for the unit MUST be referenced in the INI file as 'image: [unitName].png'. For example, if 'unitName' is "artillery_mech", the INI **MUST** contain 'image: artillery_mech.png'.
+                *   For every image filename you write in the '[graphics]' section (e.g., 'image: artillery_mech.png', 'image_turret: turret.png'), you MUST create a corresponding entry in the 'imagePrompts' JSON array.
+                *   The 'imageName' in the JSON MUST be an **EXACT, case-sensitive match** to the filename in the INI. The main sprite's entry in JSON must be '{"imageName": "[unitName].png", ...}'.
                 *   **ERROR CAUSE:** Any mismatch causes the "Could not find image..." error. You are responsible for preventing this.
 
             5.  **Sprite Style:**
@@ -114,9 +165,10 @@ export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | 
 
             6.  **Final Verification:**
                 *   Before outputting JSON, mentally perform this check:
-                    1. Is \`[core]\` \`name\` identical to \`unitName\`?
+                    1. Is '[core]' 'name' identical to 'unitName'?
                     2. Is the INI file formatted with correct line breaks?
-                    3. Is every image file in \`[graphics]\` perfectly mirrored by an \`imageName\` in \`imagePrompts\`?
+                    3. Does the INI's 'image' key point to '[unitName].png'?
+                    4. Is every image file in '[graphics]' perfectly mirrored by an 'imageName' in 'imagePrompts'?
                 *   Your output must be a single, minified JSON object matching the required schema. No extra text or markdown.
         `;
 
@@ -138,6 +190,9 @@ export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | 
         }
         
         const { unitName, iniFileContent, imagePrompts } = parsedResponse;
+
+        // Programmatically ensure the INI file is valid to prevent game errors
+        const correctedIniContent = ensureCorrectUnitNameInIni(iniFileContent, unitName);
 
         // Generate all required images in parallel
         const imagePromises = imagePrompts.map(async (imageInfo: { imageName: string, prompt: string }) => {
@@ -161,7 +216,7 @@ export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | 
             unitName: unitName,
             iniFile: {
                 name: `${unitName}.ini`,
-                content: iniFileContent,
+                content: correctedIniContent,
             },
             images: generatedImages,
         };
@@ -181,6 +236,7 @@ export const generateUnitFromImage = async (userPrompt: string, imageBase64: str
             },
         };
 
+        // FIX: Replaced backticks with single quotes for inline code formatting within the prompt to avoid parser errors.
         const textPart = {
             text: `
 You are an expert Rusted Warfare modding assistant. You have been provided with an image of a unit and a user request. Your task is to analyze the image and generate a complete, creative, and functional INI file for a unit based on that image.
@@ -194,35 +250,35 @@ User's request: "${userPrompt || 'Create a unit based on the image.'}"
 
 **Non-Negotiable Rules to Prevent Errors:**
 
-1.  **Unit Identifier (\`unitName\`):**
-    *   Create a descriptive \`unitName\` for the unit based on the image (e.g., 'quad_cannon_tank').
-    *   It MUST be \`lowercase_snake_case\`. No spaces, no capitals. This is critical for game loading.
+1.  **Unit Identifier ('unitName'):**
+    *   Create a descriptive 'unitName' for the unit based on the image (e.g., 'quad_cannon_tank').
+    *   It MUST be 'lowercase_snake_case'. No spaces, no capitals. This is critical for game loading.
 
-2.  **INI File \`[core]\` Section:**
-    *   This section MUST contain a \`name\` key.
-    *   The value of this \`name\` key MUST be an **EXACT** match for the \`unitName\` from rule 1.
-    *   **ERROR CAUSE:** A mismatch causes the "Could not find name..." error. You must prevent this.
+2.  **INI File '[core]' Section (ABSOLUTELY CRITICAL):**
+    *   This section MUST contain a 'name' key.
+    *   The value of this 'name' key MUST be an **EXACT** match for the 'unitName' from rule 1.
+    *   **THIS IS THE MOST COMMON CAUSE OF ERRORS.** The game will show "Could not find name in configuration file" if you fail this. Double-check your output to ensure this rule is followed perfectly.
 
 3.  **INI File Formatting:**
-    *   Each section header (e.g., \`[core]\`, \`[graphics]\`) MUST be on its own line.
-    *   Underneath a section header, every single \`key: value\` pair MUST be on its own separate line. This formatting is MANDATORY.
+    *   Each section header (e.g., '[core]', '[graphics]') MUST be on its own line.
+    *   Underneath a section header, every single 'key: value' pair MUST be on its own separate line. This formatting is MANDATORY.
     *   **EXAMPLE (Correct):**
         \`\`\`ini
         [graphics]
-        image: image.png
+        image: quad_cannon_tank.png
         \`\`\`
-    *   **EXAMPLE (Incorrect):** \`[graphics]image: image.png\`
+    *   **EXAMPLE (Incorrect):** '[graphics]image: quad_cannon_tank.png'
 
-4.  **INI File \`[graphics]\` Section:**
-    *   The user has provided the main sprite. This file will be named \`image.png\`.
-    *   You MUST include the line \`image: image.png\` in the \`[graphics]\` section.
-    *   You MUST NOT define any other images (like \`image_turret\`, \`image_wreak\`, etc.). Only use the single provided image.
+4.  **INI File '[graphics]' Section:**
+    *   The user has provided the main sprite. This file MUST be named after the unit's 'unitName'.
+    *   You MUST include the line 'image: [unitName].png' in the '[graphics]' section. For example, if you decide the 'unitName' is 'quad_cannon_tank', this line MUST be 'image: quad_cannon_tank.png'.
+    *   You MUST NOT define any other images (like 'image_turret', 'image_wreak', etc.). Only use the single provided image.
 
 5.  **Final Verification:**
     *   Before outputting JSON, mentally perform this check:
-        1. Is \`[core]\` \`name\` identical to \`unitName\`?
+        1. Is '[core]' 'name' identical to 'unitName'?
         2. Is the INI file formatted with correct line breaks?
-        3. Does \`[graphics]\` contain exactly \`image: image.png\` and no other image definitions?
+        3. Does '[graphics]' contain exactly 'image: [unitName].png' and no other image definitions?
     *   Your output must be a single, minified JSON object matching the required schema. No extra text or markdown.
         `
         };
@@ -246,9 +302,12 @@ User's request: "${userPrompt || 'Create a unit based on the image.'}"
 
         const { unitName, iniFileContent } = parsedResponse;
 
-        // The image is provided by the user, so we don't generate any.
+        // Programmatically ensure the INI file is valid to prevent game errors
+        const correctedIniContent = ensureCorrectUnitNameInIni(iniFileContent, unitName);
+
+        // The user's image is the main sprite and must be named after the unit.
         const userImage = {
-            name: 'image.png',
+            name: `${unitName}.png`,
             dataUrl: `data:${mimeType};base64,${imageBase64}`
         };
 
@@ -257,7 +316,7 @@ User's request: "${userPrompt || 'Create a unit based on the image.'}"
             unitName: unitName,
             iniFile: {
                 name: `${unitName}.ini`,
-                content: iniFileContent,
+                content: correctedIniContent,
             },
             images: [userImage],
         };
@@ -271,6 +330,7 @@ User's request: "${userPrompt || 'Create a unit based on the image.'}"
 
 export const editCodeWithGemini = async (currentCode: string, instruction: string): Promise<string> => {
     try {
+        // FIX: Replaced backticks with single quotes for inline code formatting within the prompt to avoid parser errors.
         const prompt = `
 You are an expert Rusted Warfare modding assistant. The user wants to modify the following .ini code based on their instruction.
 
@@ -286,8 +346,8 @@ Your task is to return ONLY the complete, modified .ini code. Do not add any exp
 
 **CRITICAL FORMATTING RULES:**
 1.  Ensure the format is a valid Rusted Warfare INI format.
-2.  Each section header (e.g., \`[core]\`) must be on its own line.
-3.  Every \`key: value\` pair must be on its own separate line.
+2.  Each section header (e.g., '[core]') must be on its own line.
+3.  Every 'key: value' pair must be on its own separate line.
 4.  Crucially, ensure the 'name' key under the '[core]' section is preserved and remains valid.
 
 Failing to follow these formatting rules will cause the game to crash.
