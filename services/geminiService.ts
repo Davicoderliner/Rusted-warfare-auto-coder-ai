@@ -39,37 +39,38 @@ const unitGenerationResponseSchema = {
 export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | null> => {
     try {
         const prompt = `
-            You are an expert Rusted Warfare modding assistant. Your task is to generate a complete unit package based on a user's description. A common error in Rusted Warfare modding is "Could not find image in configuration file in section:graphics", which happens when an image filename in the [graphics] section of the .ini file does not exactly match the actual image filename in the mod folder. Your primary goal is to prevent this error.
+            You are an expert Rusted Warfare modding assistant. Your task is to generate a complete unit package that is GUARANTEED to load without errors. You must prevent two specific, game-breaking errors:
+            1. "Could not find name in configuration file in section:core"
+            2. "Could not find image in configuration file in section:graphics"
 
             User's request: "${userPrompt}"
 
-            **Instructions:**
+            **Non-Negotiable Rules to Prevent Errors:**
 
-            1.  **Design the Unit Identifier:**
-                *   First, create a unique identifier for this unit. This will be its \`unitName\`.
-                *   **CRITICAL:** The \`unitName\` MUST be a single word in \`lowercase_snake_case\`. For example, 'heavy_tank', 'scout_ship', 'artillery_mech'. It must NOT contain spaces or capital letters.
-                *   This \`unitName\` will be used for the unit's folder name, its \`.ini\` file name, and its internal \`name\` in the \`[core]\` section.
+            1.  **Unit Identifier (\`unitName\`):**
+                *   Create a unique \`unitName\` for the unit (e.g., 'heavy_tank').
+                *   It MUST be \`lowercase_snake_case\`. No spaces, no capitals. This is used for the folder, .ini file, and the core \`name\`.
 
-            2.  **Create the INI File Content:**
-                *   Create the complete and valid Rusted Warfare .ini file content.
-                *   **CRITICAL:** In the \`[core]\` section, you MUST include a \`name\` key. The value of this key MUST be the exact \`unitName\` you created in step 1. Example: \`name: heavy_tank\`.
-                *   In the \`[graphics]\` section, define all necessary images (e.g., \`image\`, \`image_turret\`, \`image_wreak\`). The filenames should be simple, like \`base.png\`, \`turret.png\`, \`dead.png\`.
+            2.  **INI File \`[core]\` Section:**
+                *   This section MUST contain a \`name\` key.
+                *   The value of this \`name\` key MUST be an **EXACT** match for the \`unitName\` from step 1.
+                *   **EXAMPLE:** If \`unitName\` is "artillery_mech", the INI file **MUST** contain \`name: artillery_mech\` under \`[core]\`.
+                *   **ERROR CAUSE:** Failing this rule causes the "Could not find name..." error. You are responsible for preventing this.
 
-            3.  **Create Image Prompts and Ensure Consistency (MOST IMPORTANT STEP):**
-                *   This step is where you prevent the "Could not find image" error.
-                *   For **every single** image file referenced in the \`[graphics]\` section of the INI file, you MUST create a corresponding object in the \`imagePrompts\` array.
-                *   **ABSOLUTELY CRITICAL:** The value for the \`imageName\` key in each \`imagePrompts\` object MUST BE AN EXACT, case-sensitive match to the filename string you used as a value in the \`[graphics]\` section of the \`iniFileContent\`.
-                *   **Example of what to do:**
-                    *   If \`iniFileContent\` has \`image: tank_body.png\`
-                    *   Then \`imagePrompts\` must have an object \`{ "imageName": "tank_body.png", ... }\`
-                *   **Example of what NOT to do (THIS WILL CAUSE AN ERROR):**
-                    *   If \`iniFileContent\` has \`image: tank_body.png\`
-                    *   But \`imagePrompts\` has \`{ "imageName": "tank.png", ... }\` or \`{ "imageName": "Tank_Body.png", ... }\`. This mismatch will break the mod.
-                *   **CRITICAL STYLE:** All prompts MUST generate a **2D pixel art sprite** from a **strict top-down orthographic perspective**. The style must be consistent with a retro RTS game like Rusted Warfare. The background MUST be black or transparent.
+            3.  **INI File \`[graphics]\` and Image Consistency:**
+                *   For every image filename you write in the \`[graphics]\` section (e.g., \`image: base.png\`), you MUST create a corresponding entry in the \`imagePrompts\` JSON array.
+                *   The \`imageName\` in the JSON MUST be an **EXACT, case-sensitive match** to the filename in the INI.
+                *   **EXAMPLE:** If INI has \`image_turret: turret_heavy.png\`, JSON must have \`{ "imageName": "turret_heavy.png", ... }\`.
+                *   **ERROR CAUSE:** Any mismatch causes the "Could not find image..." error. You are responsible for preventing this.
 
-            4.  **Final Verification and Formatting:**
-                *   Before creating the final JSON, perform this check: for every key-value pair under \`[graphics]\` (like \`image: some_file.png\`), confirm that there is a corresponding object in \`imagePrompts\` where \`imageName\` is also \`"some_file.png"\`. This check is mandatory.
-                *   Return a single, minified JSON object matching the required schema. Do not include any other text, explanations, or markdown formatting.
+            4.  **Sprite Style:**
+                *   All generated sprites must be **2D pixel art** from a **strict top-down orthographic perspective**. The background must be black or transparent.
+
+            5.  **Final Verification:**
+                *   Before outputting JSON, mentally perform this check:
+                    1. Is \`[core]\` \`name\` identical to \`unitName\`?
+                    2. Is every image file in \`[graphics]\` perfectly mirrored by an \`imageName\` in \`imagePrompts\`?
+                *   Your output must be a single, minified JSON object matching the required schema. No extra text or markdown.
         `;
 
         const codeGenResponse = await ai.models.generateContent({
