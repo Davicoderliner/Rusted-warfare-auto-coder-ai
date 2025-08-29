@@ -2,6 +2,7 @@
 export interface ChatMessage {
     role: 'user' | 'ai';
     content: string;
+    imageUrl?: string;
 }
 
 export interface GeneratedUnit {

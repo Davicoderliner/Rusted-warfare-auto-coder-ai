@@ -3,15 +3,15 @@ import React, { useState, useCallback } from 'react';
 import { ChatPanel } from './components/ChatPanel';
 import { SpritePreview } from './components/SpritePreview';
 import { CodeEditor } from './components/CodeEditor';
-import { generateUnit, editCodeWithGemini, generateModName } from './services/geminiService';
+import { generateUnit, editCodeWithGemini, generateModName, generateUnitFromImage } from './services/geminiService';
 import type { ChatMessage, Mod } from './types';
-import { Bot, Code2, Image as ImageIcon, Wind, Download, Package, Wand2, Send, X } from 'lucide-react';
+import { Bot, Code2, Image as ImageIcon, Wind, Download, Package, Wand2, Send, X, Paperclip } from 'lucide-react';
 
 // Make TypeScript aware of JSZip from the CDN script
 declare var JSZip: any;
 
 // A simple, placeholder 64x64px icon for the mod. It's a cyan gear.
-const placeholderIconBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAARRSURBVHhe7ZxLyxtRFMfvTCEgCIIgCIKgSATxVETwJSIi6ANR8P8gCAoiiGAQEcEoiCCgKFgEVARRUBRRUBRBURRFERVFEBFFEAQRAUEUEUH8/ZZ7u2f3Zmd2d3ZndmfnD5/UNDPd99xzz525997ECEaYgTEbGAzMBiYDg4HZwGBgNjAZGAzMBgYDs4HZwGBgNjAZGAzMBgYDs4HZwGA4H2Aw3AMzDAbh0wzAGADMAEYMfhswAIbB+wyW3e2ACMDzDNYfA8zHj82xAZgBDPfADIPfBgyW3e2AEQLMh81xBgyW3e0AEQLMhwl+GzBYdrd7ADMAmF/uWACDAcB8kG0BDIcB5oPsg2EwAGAw3AMzDAbh0wzAGADMAEYMfhswAIbB+wyW3e2ACMDzDNYfA8zHj82xAZgBDPfADIPfBgyW3e2AEQLMh81xBgyW3e0AEQLMhwl+GzBYdrd7ADMAmF/uWACDAcB8kG0BDIcB5oPsg2EwAGAw3AMzDAbh0wzAGADMAEYMfhswAIbB+wyW3e2ACMDzDNYfA8zHj82xAZgBDPfADIPfBgyW3e2AEQLMh81xBgyW3e0AEQLMhwl+GzBYdrd7ADMAmF/uWACDAcB8kG0BDIcB5oPsg2EwAGBwhsE40L+2u+n9+2+P9u+9/mhn/9n3Rxv7t+4fbew/Of20/fP3b7d/uG0A9u/d/3q4fe/N7s+7x/Z/Ov1k//Dt7r/6uP375xXAZP8oYPA5f4dZ8O/c/qf9y92D/S+7r238/XwB8PtQ/+b6v+3e7pxt/vLgYwFMwEBgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwESY4R+t/yH9a/s3jEAAAAASUVORK5CYII=';
+const placeholderIconBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAARRSURBVHhe7ZxLyxtRFMfvTCEgCIIgCIKgSATxVETwJSIi6ANR8P8gCAoiiGAQEcEoiCCgKFgEVARRUBRRUBRBURRFERVFEBFFEAQRAUEUEUH8/ZZ7u2f3Zmd2d3ZndmfnD5/UNDPd99xzz525997ECEaYgTEbGAzMBiYDg4HZwGBgNjAZGAzMBgYDs4HZwGBgNjAZGAzMBgYDs4HZwGA4H2Aw3AMzDAbh0wzAGADMAEYMfhswAIbB+wyW3e2ACMDzDNYfA8zHj82xAZgBDPfADIPfBgyW3e2AEQLMh81xBgyW3e0AEQLMhwl+GzBYdrd7ADMAmF/uWACDAcB8kG0BDIcB5oPsg2EwAGAw3AMzDAbh0wzAGADMAEYMfhswAIbB+wyW3e2ACMDzDNYfA8zHj82xAZgBDPfADIPfBgyW3e2AEQLMh81xBgyW3e0AEQLMhwl+GzBYdrd7ADMAmF/uWACDAcB8kG0BDIcB5oPsg2EwAGAw3AMzDAbh0wzAGADMAEYMfhswAIbB+wyW3e2ACMDzDNYfA8zHj82xAZgBDPfADIPfBgyW3e2AEQLMh81xBgyW3e0AEQLMhwl+GzBYdrd7ADMAmF/uWACDAcB8kG0BDIcB5oPsg2EwAGBwhsE40L+2u+n9+2+P9u+9/mhn/9n3Rxv7t+4fbew/Of20/fP3b7d/uG0A9u/d/3q4fe/N7s+7x/Z/Ov1k//Dt7r/6uP375xXAZP8oYPA5f4dZ8O/c/qf9y92D/S+7r238/XwB8PtQ/+b6v+3e7pxt/vLgYwFMwEBgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwERgtwEDgV0GDIReBgwEdgsGErgMmAjsMmAgsMtgINBlwESY4R+t/yH9a/s3jEAAAAASUVORK5CYII=';
 
 // Helper function to convert a base64 data URL to a Blob
 const dataURLtoBlob = (dataurl: string): Blob | null => {
@@ -29,15 +29,57 @@ const dataURLtoBlob = (dataurl: string): Blob | null => {
     return new Blob([u8arr], { type: mime });
 };
 
+// Helper function to resize an image client-side
+const resizeImage = (file: File, maxSize: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            if (!event.target?.result) return reject(new Error("Could not read file"));
+            const img = new Image();
+            img.src = event.target.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let { width, height } = img;
+
+                if (width > height) {
+                    if (width > maxSize) {
+                        height = Math.round(height * (maxSize / width));
+                        width = maxSize;
+                    }
+                } else {
+                    if (height > maxSize) {
+                        width = Math.round(width * (maxSize / height));
+                        height = maxSize;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error("Could not get canvas context"));
+                
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                resolve(canvas.toDataURL(file.type));
+            };
+            img.onerror = reject;
+        };
+        reader.onerror = reject;
+    });
+};
+
 
 const App: React.FC = () => {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
     {
       role: 'ai',
-      content: "Welcome to the Rusted Warfare Auto-Coder! Let's build a mod. Describe the first unit you want to create.",
+      content: "Welcome to the Rusted Warfare Auto-Coder! Let's build a mod. Describe the first unit you want to create, or upload an image to start.",
     },
   ]);
   const [userInput, setUserInput] = useState<string>('');
+  const [selectedImage, setSelectedImage] = useState<{dataUrl: string; file: File} | null>(null);
   const [currentMod, setCurrentMod] = useState<Mod | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isEditingModName, setIsEditingModName] = useState<boolean>(false);
@@ -45,16 +87,48 @@ const App: React.FC = () => {
   
   const latestUnit = currentMod?.units[currentMod.units.length - 1];
 
-  const handleSendMessage = useCallback(async () => {
-    if (!userInput.trim() || isLoading) return;
+  const handleImageSelect = useCallback(async (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    setIsLoading(true);
+    try {
+        const dataUrl = await resizeImage(file, 128); // Resize to 128x128 max
+        setSelectedImage({ dataUrl, file });
+    } catch (error) {
+        console.error("Error resizing image:", error);
+        setChatHistory(prev => [...prev, { role: 'ai', content: "Sorry, I couldn't process that image. It might be corrupted or in an unsupported format. Please try another one." }]);
+    } finally {
+        setIsLoading(false);
+    }
+  }, []);
 
-    const newUserMessage: ChatMessage = { role: 'user', content: userInput };
+  const handleImageRemove = useCallback(() => {
+    setSelectedImage(null);
+  }, []);
+
+  const handleSendMessage = useCallback(async () => {
+    if ((!userInput.trim() && !selectedImage) || isLoading) return;
+
+    const newUserMessage: ChatMessage = { 
+        role: 'user', 
+        content: userInput,
+        imageUrl: selectedImage?.dataUrl 
+    };
     setChatHistory(prev => [...prev, newUserMessage]);
+
+    const imageToProcess = selectedImage;
     setUserInput('');
+    setSelectedImage(null);
     setIsLoading(true);
 
     try {
-      const result = await generateUnit(userInput);
+      let result;
+      if (imageToProcess) {
+          const base64Data = imageToProcess.dataUrl.split(',')[1];
+          result = await generateUnitFromImage(userInput, base64Data, imageToProcess.file.type);
+      } else {
+          result = await generateUnit(userInput);
+      }
+      
       if (result) {
         setCurrentMod(prevMod => {
             const newMod = prevMod ?? { name: 'MyRustedMod', units: [] };
@@ -63,7 +137,7 @@ const App: React.FC = () => {
 
         const aiResponseMessage: ChatMessage = {
             role: 'ai',
-            content: `I've generated the '${result.unitName}' unit and added it to your mod! You can describe another unit or download the mod folder.`,
+            content: `I've generated the '${result.unitName}' unit and added it to your mod! You can describe another unit, upload another image, or download the mod folder.`,
         };
         setChatHistory(prev => [...prev, aiResponseMessage]);
       } else {
@@ -74,7 +148,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [userInput, isLoading]);
+  }, [userInput, isLoading, selectedImage]);
   
   const handleEditCode = useCallback(async (instruction: string) => {
     if (!instruction.trim() || !latestUnit || !currentMod || isLoading) return;
@@ -266,6 +340,9 @@ icon: icon.png
             onUserInput={setUserInput}
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
+            onImageSelect={handleImageSelect}
+            onImageRemove={handleImageRemove}
+            selectedImagePreview={selectedImage?.dataUrl ?? null}
           />
         </div>
 
