@@ -39,7 +39,7 @@ const unitGenerationResponseSchema = {
 export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | null> => {
     try {
         const prompt = `
-            You are an expert Rusted Warfare modding assistant. Your task is to generate a complete unit package based on a user's description.
+            You are an expert Rusted Warfare modding assistant. Your task is to generate a complete unit package based on a user's description. A common error in Rusted Warfare modding is "Could not find image in configuration file in section:graphics", which happens when an image filename in the [graphics] section of the .ini file does not exactly match the actual image filename in the mod folder. Your primary goal is to prevent this error.
 
             User's request: "${userPrompt}"
 
@@ -52,20 +52,24 @@ export const generateUnit = async (userPrompt: string): Promise<GeneratedUnit | 
 
             2.  **Create the INI File Content:**
                 *   Create the complete and valid Rusted Warfare .ini file content.
-                *   **CRITICAL:** In the \`[core]\` section, you MUST include a \`name\` key. The value of this key MUST be the exact \`unitName\` you created in step 1. Example: \`name: heavy_tank\`. This is the most important step to prevent game errors.
-                *   The format must always use \`key: value\`.
-                *   Infer appropriate stats like \`price\`, \`maxHp\`, \`mass\`, \`moveSpeed\`, etc., based on the unit's description.
-                *   In the \`[graphics]\` section, define all necessary images. A unit needs at least an \`image\`. If it has turrets, it needs \`image_turret\`. Also consider adding an \`image_wreak\`. The filenames should be simple, like \`image.png\`, \`image_turret.png\`.
+                *   **CRITICAL:** In the \`[core]\` section, you MUST include a \`name\` key. The value of this key MUST be the exact \`unitName\` you created in step 1. Example: \`name: heavy_tank\`.
+                *   In the \`[graphics]\` section, define all necessary images (e.g., \`image\`, \`image_turret\`, \`image_wreak\`). The filenames should be simple, like \`base.png\`, \`turret.png\`, \`dead.png\`.
 
-            3.  **Create Image Prompts:**
-                *   For **each and every** image file referenced in the \`[graphics]\` section of the INI file (e.g., the value for keys like \`image\`, \`image_turret\`, \`image_wreak\`), you MUST create a corresponding entry in the \`imagePrompts\` array.
-                *   **CRITICAL - DO NOT FAIL THIS STEP:** The \`imageName\` string in each \`imagePrompts\` object MUST EXACTLY MATCH the filename string you used as a value in the \`[graphics]\` section of the \`iniFileContent\`.
-                *   For example, if the INI contains \`image: base.png\` and \`image_turret: turret.png\`, then the \`imagePrompts\` array must contain two objects, one with \`"imageName": "base.png"\` and another with \`"imageName": "turret.png"\`. A mismatch here will cause the mod to fail.
+            3.  **Create Image Prompts and Ensure Consistency (MOST IMPORTANT STEP):**
+                *   This step is where you prevent the "Could not find image" error.
+                *   For **every single** image file referenced in the \`[graphics]\` section of the INI file, you MUST create a corresponding object in the \`imagePrompts\` array.
+                *   **ABSOLUTELY CRITICAL:** The value for the \`imageName\` key in each \`imagePrompts\` object MUST BE AN EXACT, case-sensitive match to the filename string you used as a value in the \`[graphics]\` section of the \`iniFileContent\`.
+                *   **Example of what to do:**
+                    *   If \`iniFileContent\` has \`image: tank_body.png\`
+                    *   Then \`imagePrompts\` must have an object \`{ "imageName": "tank_body.png", ... }\`
+                *   **Example of what NOT to do (THIS WILL CAUSE AN ERROR):**
+                    *   If \`iniFileContent\` has \`image: tank_body.png\`
+                    *   But \`imagePrompts\` has \`{ "imageName": "tank.png", ... }\` or \`{ "imageName": "Tank_Body.png", ... }\`. This mismatch will break the mod.
                 *   **CRITICAL STYLE:** All prompts MUST generate a **2D pixel art sprite** from a **strict top-down orthographic perspective**. The style must be consistent with a retro RTS game like Rusted Warfare. The background MUST be black or transparent.
 
             4.  **Final Verification and Formatting:**
-                *   Before creating the final JSON, double-check your work. Verify that every image filename listed as a value in the \`[graphics]\` section of your \`iniFileContent\` has an exactly corresponding \`imageName\` in the \`imagePrompts\` array.
-                *   Return a single, minified JSON object matching the required schema. The JSON must contain the \`unitName\`, the \`iniFileContent\`, and an array of \`imagePrompts\`. Do not include any other text, explanations, or markdown formatting.
+                *   Before creating the final JSON, perform this check: for every key-value pair under \`[graphics]\` (like \`image: some_file.png\`), confirm that there is a corresponding object in \`imagePrompts\` where \`imageName\` is also \`"some_file.png"\`. This check is mandatory.
+                *   Return a single, minified JSON object matching the required schema. Do not include any other text, explanations, or markdown formatting.
         `;
 
         const codeGenResponse = await ai.models.generateContent({
@@ -150,5 +154,63 @@ Your task is to return ONLY the complete, modified .ini code. Do not add any exp
     } catch(error) {
         console.error("Error editing code with Gemini:", error);
         throw error;
+    }
+};
+
+const modNameResponseSchema = {
+    type: Type.OBJECT,
+    properties: {
+        modName: {
+            type: Type.STRING,
+            description: "The new mod name, in PascalCase. E.g., 'MyAwesomeMod'. No spaces or special characters."
+        }
+    },
+    required: ["modName"]
+};
+
+export const generateModName = async (instruction: string, currentName: string): Promise<string> => {
+    try {
+        const prompt = `
+You are an expert Rusted Warfare modding assistant. The user wants to change the name of their mod.
+
+Current mod name: "${currentName}"
+User's instruction: "${instruction}"
+
+Your task is to generate a new mod name based on the user's instruction.
+
+**CRITICAL Rules:**
+1. The name must be a valid folder name.
+2. It must be in PascalCase (e.g., 'MyAwesomeMod', 'MechWarriors'). This means it starts with a capital letter, and contains only letters and numbers.
+3. It MUST NOT contain spaces, special characters, or file extensions.
+
+Return a JSON object with the new mod name.
+        `;
+        
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: modNameResponseSchema,
+                temperature: 0.3,
+            }
+        });
+
+        const jsonString = response.text;
+        const parsed = JSON.parse(jsonString);
+        const newName = parsed.modName;
+
+        if (!newName || !/^[A-Z][a-zA-Z0-9]*$/.test(newName)) {
+            throw new Error("AI generated an invalid mod name format.");
+        }
+
+        return newName;
+
+    } catch(error) {
+        console.error("Error generating mod name with Gemini:", error);
+        if (error instanceof Error && error.message.includes("invalid mod name")) {
+            throw error;
+        }
+        throw new Error("The AI failed to generate a valid name. Please try a different description.");
     }
 };
