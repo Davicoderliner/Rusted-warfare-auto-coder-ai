@@ -108,8 +108,21 @@ Review the code above against the Rusted Warfare modding documentation you have 
     *   Is every 'key: value' pair on its own separate line?
     *   Fix all formatting errors.
     
-7.  **Remove Invalid Keys:**
-    *   Scan all sections and remove any keys that are not part of the official Rusted Warfare modding API. For example, in '[attack]', keys like 'targetGroundUnits' are invalid. You know the valid keys. Be strict.
+7.  **Remove Invalid & Correct Common Mistake Keys:**
+    *   Scan all sections and remove any keys that are not part of the official Rusted Warfare modding API.
+    *   **CRITICAL:** Correct common key and value errors:
+        *   In \`[graphics]\`, remove invalid keys like \`frame_width\` or \`frame_height\`. The game only understands \`total_frames\`.
+        *   In \`[attack]\`, replace \`attackEnabled: true\` with \`canAttack: true\`. Replace \`attackRange\` with the correct key \`maxAttackRange\`.
+    *   **CRITICAL:** A common hallucination is inventing keys like \`is: boss\`, \`is: air\`, or \`is: unique\`. These are invalid. Find and replace them with their correct official counterparts:
+        *   If you see \`is: air\`, remove it. Ensure the unit has both \`isAir: true\` (in \`[core]\`) and \`movementType: AIR\` (in \`[movement]\`) if it's supposed to fly.
+        *   If you see \`is: unique\`, remove it and add \`buildLimit: 1\` to the \`[core]\` section.
+        *   If you see \`is: boss\`, remove it. A "Boss" is a design concept, not a flag. The "Boss" label should only be in text fields like \`displayText\`.
+        
+8.  **Deprecation Check:**
+    *   Find and modernize any deprecated keys.
+    *   **CRITICAL:** The old \`action_#_...\` format is obsolete. Convert any such actions into the modern \`[action_NAME]\` section format.
+    *   **CRITICAL:** The old \`canBuild_#_name\` format is obsolete. Convert it to the modern \`[canBuild_NAME]\` section format.
+    *   Remove deprecated graphics keys like \`teamColorsUseHue\` and replace them with the modern \`teamColoringMode\` key.
 
 Return the complete, corrected INI file content as raw text, without any surrounding text or markdown.
     `;
@@ -130,22 +143,14 @@ export const generateUnit = async (userPrompt: string, audio: { dataUrl: string,
     try {
         // FIX: Escaped backticks in the template literal to prevent parsing errors.
         const prompt = `
-            You are an expert Rusted Warfare modding assistant. You have been provided with an exhaustive reference document and several advanced examples for the Rusted Warfare modding API. Your task is to use this deep knowledge to generate a complete, creative, and functional unit package that is GUARANTEED to load without errors.
+            You are a world-class game designer and Rusted Warfare modding guru. Your mission is to translate a user's idea into a complete, creative, and flawlessly functional unit package. You have an encyclopedic knowledge of the Rusted Warfare modding API, including advanced features from version 1.15 and later.
 
             User's request: "${userPrompt}"
 
-            **Leverage Comprehensive Modding Knowledge:**
-            You have detailed information on all INI sections. Use this knowledge to go beyond basic units and create something that feels unique and expertly crafted based on the user's prompt.
-
-            **Advanced Techniques Learned from Examples:**
-            - **Transformations & States:** Units can have multiple states (e.g., flying, submerged). These are handled with '[action_...]' sections using 'convertTo: new_unit_name'. The different states are defined in separate .ini files ('new_unit_name.ini').
-            - **Inheritance:** Secondary state files ('_underwater.ini', '_transition.ini') can use 'copyFrom: base_unit.ini' to inherit all properties from a base unit and only override what's necessary, like '[movement]' or '[attack]' sections.
-            - **Animations:** Use '[animation_NAME]' sections to define complex movements for cosmetic parts during actions (like diving or surfacing). Link these to actions using 'whenBuilding_playAnimation: NAME'.
-            - **Cosmetic Parts:** Use '[arm_#]' and '[leg_#]' to attach non-functional, animated parts to a unit for visual appeal.
-            - **Complex Projectiles:** Projectiles can be highly customized with effects ('lightingEffect'), custom hit effects ('explodeEffect:CUSTOM:...'), and specific damage multipliers ('shieldDamageMultiplier', 'buildingDamageMultiplier').
-            - **Custom Effects:** Define visual effects using '[effect_NAME]' sections to create unique visuals for weapons, movement, and explosions.
-            - **Builders & Queues:** Units can build other units. This is defined in a '[canBuild_...]' section (e.g., '[canBuild_production]'). You can specify a list of units it can build with 'name: tank1, mech2'. You can also specify build speed with 'buildSpeed: 0.5'.
-
+            **DESIGN PHILOSOPHY (Apply this thinking):**
+            1.  **Creative Interpretation:** Don't just make a basic unit. Think like a game designer. What is this unit's unique role on the battlefield? Can it transform? Does it have a special active ability using \`[action_...]\`? Use custom effects (\`[effect_...]\`), animations (\`[animation_...]\`), and cosmetic parts (\`[arm_#]\`, \`[leg_#]\`) to make it visually interesting and memorable.
+            2.  **Game Balance:** A fun unit is a balanced unit. If you give it high damage, consider giving it low health, slow speed, or a high cost. Briefly add comments (using \`#\`) in the .ini file to explain your design choices for complex sections, like \`[action_...]\` or special turrets.
+            3.  **Completeness:** The generated unit must be fully functional out-of-the-box. This means all necessary files are described, and the INI code is robust.
 
             **Audio File Handling (Optional):**
             *   An audio file may be provided with the user's prompt. Your task is to listen to it and decide how to use it for the unit's sounds.
@@ -212,13 +217,24 @@ export const generateUnit = async (userPrompt: string, audio: { dataUrl: string,
             11. **Sprite Style:**
                 *   All generated sprites must be **2D pixel art** from a **strict top-down orthographic perspective**. The background must be black or transparent.
 
-            12. **Final Verification:**
+            12. **Invalid Key & Section Prevention (EXTREMELY CRITICAL):**
+                *   You MUST NOT invent unofficial keys or sections.
+                *   Common invented keys like \`is: air\`, \`is: boss\`, or \`is: unique\` are invalid and will crash the game.
+                    *   To make a unit fly, you MUST use both \`isAir: true\` (in \`[core]\`) and \`movementType: AIR\` (in \`[movement]\`).
+                    *   To make a unit "unique" (limit how many can be built), you MUST use \`buildLimit: 1\` (in \`[core]\`).
+                    *   To label a unit as a "Boss", you should add it to its description, for example: \`displayText: My Unit (Boss)\`. Do not use a flag for this.
+                *   **NEVER** invent sections. An \`[armour_...]\` section is invalid; for shields, you MUST use \`[shield_...]\` sections.
+                *   In \`[graphics]\`, do not invent keys like \`frame_width\` or \`frame_height\`. You must use \`total_frames\`.
+                *   In \`[attack]\`, you MUST use \`maxAttackRange\` (not \`attackRange\`) for the attack radius, and \`canAttack: true\` (not \`attackEnabled: true\`).
+
+            13. **Final Verification:**
                 *   Before outputting JSON, mentally perform this check:
                     1. Is '[core]' 'name' identical to 'unitName'? Does '[core]' also have all mandatory keys: 'class', 'price', 'radius', 'maxHp', 'buildSpeed', 'techLevel'?
                     2. Is the INI file formatted with correct line breaks?
                     3. Does the INI's 'image' key point to '[unitName].png'?
                     4. Is **every single image file** referenced anywhere in the INI (in '[graphics]', '[projectile_...]', '[effect_...]', etc.) perfectly mirrored by a corresponding 'imageName' in the 'imagePrompts' array?
-                    5. If I added sound keys to the INI, did I also populate 'soundFileNames' and vice-versa? If no audio was provided, are all sound keys and the soundFileNames array omitted?
+                    5. Is **every single invented key** like \`is: air\` removed and replaced with its correct, official counterpart? Are all other invalid keys fixed?
+                    6. If I added sound keys to the INI, did I also populate 'soundFileNames' and vice-versa? If no audio was provided, are all sound keys and the soundFileNames array omitted?
             
             *   Your adherence to these rules is non-negotiable and directly impacts the mod's ability to load. Failure to comply will result in a poor user experience.
 
@@ -300,15 +316,14 @@ export const generateUnit = async (userPrompt: string, audio: { dataUrl: string,
 export const generateUnitFromImage = async (userPrompt: string, base64ImageData: string, mimeType: string, autoFix: boolean): Promise<GeneratedUnit | null> => {
     try {
         const prompt = `
-You are an expert Rusted Warfare modding assistant. A user has provided an image of a unit and a text prompt. Your task is to analyze both and generate a complete, creative, and functional Rusted Warfare .ini file for it. You must also determine a valid 'unitName' that will be used for the file names.
+You are a world-class game designer and Rusted Warfare modding guru. A user has provided an image of a unit and a text prompt. Your task is to analyze both and generate a complete, creative, and functional Rusted Warfare .ini file for it. You must also determine a valid 'unitName' that will be used for the file names.
 
 **User's Request:** "${userPrompt}"
 
-**Your Task & Non-Negotiable Rules:**
-
-1.  **Analyze Image & Prompt:** Determine the unit's type (tank, mech, ship, plane), primary weapon(s), and overall design from the provided image. Use the user's text prompt to fill in details like faction, special abilities, or behavior.
-2.  **Create 'unitName':** Based on the analysis, create a unique 'unitName' (e.g., 'heavy_bomber'). It **MUST** be 'lowercase_snake_case'. This name will be used for the .ini filename and the 'name' key in the '[core]' section.
-3.  **Generate INI File:** Create a complete .ini file that accurately reflects the unit's appearance and the user's prompt.
+**DESIGN PHILOSOPHY (Apply this thinking):**
+1.  **Deep Visual Interpretation:** Don't just look at the image; analyze it. Infer the unit's function, armament, and potential special abilities from its visual design. Is it heavily armored? Does it have unique glowing parts that could signify a special weapon? Translate these visual cues into functional .ini code using your expert knowledge.
+2.  **Creative Synthesis:** Combine the visual analysis with the user's text prompt. The text provides context and desires for behavior. Weave these requests into the INI file to create a unit that is both visually and functionally coherent.
+3.  **Game Balance:** A fun unit is a balanced unit. Based on the unit's appearance and likely power, assign a reasonable cost and stats. If it looks like a glass cannon, reflect that in the INI. Add comments (#) to explain complex design choices.
 
 **INI File Generation Rules (CRITICAL - Adherence is Mandatory to Prevent Game Crashes):**
 
@@ -345,6 +360,16 @@ You are an expert Rusted Warfare modding assistant. A user has provided an image
 
 8.  **Sound Files (EXTREMELY CRITICAL):**
     *   Since no audio file was provided with the image, you are **STRICTLY PROHIBITED** from adding **ANY** sound-related keys to the INI file (e.g., 'attackSound', 'moveSound', 'deathSound', etc.). This prevents game errors from referencing missing files.
+
+9.  **Invalid Key & Section Prevention (EXTREMELY CRITICAL):**
+    *   You **MUST NOT** invent unofficial keys or sections.
+    *   Common invented keys like \`is: air\`, \`is: boss\`, or \`is: unique\` are invalid and will crash the game.
+        *   To make a unit fly, you **MUST** use both \`isAir: true\` (in \`[core]\`) and \`movementType: AIR\` (in \`[movement]\`).
+        *   To make a unit "unique" (limit how many can be built), you **MUST** use \`buildLimit: 1\` (in \`[core]\`).
+        *   To label a unit as a "Boss", you should add it to its description, for example: \`displayText: My Unit (Boss)\`. Do not use a flag for this.
+    *   **NEVER** invent sections. An \`[armour_...]\` section is invalid; for shields, you **MUST** use \`[shield_...]\` sections.
+    *   In \`[graphics]\`, do not invent keys like \`frame_width\` or \`frame_height\`. You must use \`total_frames\`.
+    *   In \`[attack]\`, you **MUST** use \`maxAttackRange\` (not \`attackRange\`) for the attack radius, and \`canAttack: true\` (not \`attackEnabled: true\`).
 
 Return ONLY the JSON object conforming to the schema.
 `;
@@ -421,7 +446,13 @@ ${currentCode}
 1.  Analyze the user's instruction and the current code.
 2.  Generate a new version of the INI file that incorporates the changes.
 3.  Ensure your output is ONLY the raw, complete, and updated INI file content. Do not include explanations, comments, or markdown.
-4.  After making the changes, perform the same critical validation checks you would for a new unit to prevent errors. Ensure all keys are in the correct sections, data types are correct, and builders are configured properly. Specifically, ensure the '[core]' section contains 'class: CustomUnitMetadata' and all mandatory keys ('name', 'price', 'radius', 'maxHp', 'buildSpeed', 'techLevel'), and that 'movementType' in '[movement]' is a valid value (e.g., LAND, AIR, WATER, etc.). The only valid buildable units are: [${(existingUnitNames ?? []).join(', ') || 'None'}].
+4.  After making the changes, perform a final critical validation. Ensure all keys are in the correct sections, data types are correct, and mandatory sections/keys are present.
+5.  **CRITICAL:** You must find and fix all common "hallucination" errors. This includes:
+    *   Replacing invented keys like \`is: boss\`, \`is: air\`, or \`is: unique\` with their official counterparts (\`displayText\`, \`isAir: true\`, \`buildLimit: 1\`).
+    *   Replacing invented sections like \`[armour_...]\` with valid ones like \`[shield_...]\`.
+    *   In \`[graphics]\`, removing invalid keys like \`frame_width\` and using \`total_frames\`.
+    *   In \`[attack]\`, using the correct keys \`maxAttackRange\` (not \`attackRange\`) and \`canAttack: true\` (not \`attackEnabled: true\`).
+    *   The only valid buildable units are: [${(existingUnitNames ?? []).join(', ') || 'None'}].
 
 Return only the raw INI code.
     `;
@@ -456,7 +487,6 @@ Generate a new, creative mod name based on the user's suggestion. The name shoul
         config: {
             temperature: 0.7,
             stopSequences: ['\n'],
-            thinkingConfig: { thinkingBudget: 0 },
         }
     });
 
