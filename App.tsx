@@ -5,7 +5,7 @@ import { SpritePreview } from './components/SpritePreview';
 import { CodeEditor } from './components/CodeEditor';
 import { generateUnit, editCodeWithGemini, generateModName, generateUnitFromImage } from './services/geminiService';
 import type { ChatMessage, Mod } from './types';
-import { Bot, Code2, Image as ImageIcon, Wind, Download, Package, Wand2, Send, X, Paperclip } from 'lucide-react';
+import { Bot, Code2, Image as ImageIcon, Wind, Download, Package, Wand2, Send, X, Paperclip, Music } from 'lucide-react';
 
 // Make TypeScript aware of JSZip from the CDN script
 declare var JSZip: any;
@@ -72,15 +72,17 @@ const App: React.FC = () => {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
     {
       role: 'ai',
-      content: "Welcome to the Rusted Warfare Auto-Coder! Let's build a mod. Describe the first unit you want to create, or upload an image to start.",
+      content: "Welcome to the Rusted Warfare Auto-Coder! Let's build a mod. Describe the first unit you want to create, or upload an image or sound file to start.",
     },
   ]);
   const [userInput, setUserInput] = useState<string>('');
   const [selectedImage, setSelectedImage] = useState<{dataUrl: string; file: File} | null>(null);
+  const [selectedAudio, setSelectedAudio] = useState<{dataUrl: string; file: File} | null>(null);
   const [currentMod, setCurrentMod] = useState<Mod | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isEditingModName, setIsEditingModName] = useState<boolean>(false);
   const [modNameInput, setModNameInput] = useState<string>('');
+  const [isAutoFixEnabled, setIsAutoFixEnabled] = useState<boolean>(true);
   
   const latestUnit = currentMod?.units[currentMod.units.length - 1];
 
@@ -98,32 +100,56 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleAudioSelect = useCallback((file: File) => {
+    if (!file.type.startsWith('audio/')) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        if (event.target?.result) {
+            setSelectedAudio({ dataUrl: event.target.result as string, file });
+        }
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
   const handleImageRemove = useCallback(() => {
     setSelectedImage(null);
   }, []);
 
+  const handleAudioRemove = useCallback(() => {
+    setSelectedAudio(null);
+  }, []);
+
   const handleSendMessage = useCallback(async () => {
-    if ((!userInput.trim() && !selectedImage) || isLoading) return;
+    if ((!userInput.trim() && !selectedImage && !selectedAudio) || isLoading) return;
 
     const newUserMessage: ChatMessage = { 
         role: 'user', 
         content: userInput,
-        imageUrl: selectedImage?.dataUrl 
+        imageUrl: selectedImage?.dataUrl,
+        audioUrl: selectedAudio?.dataUrl,
     };
     setChatHistory(prev => [...prev, newUserMessage]);
 
     const imageToProcess = selectedImage;
+    const audioToProcess = selectedAudio;
     setUserInput('');
     setSelectedImage(null);
+    setSelectedAudio(null);
     setIsLoading(true);
 
     try {
       let result;
+      const existingUnitNames = currentMod?.units.map(u => u.unitName) ?? [];
+
       if (imageToProcess) {
           const base64Data = imageToProcess.dataUrl.split(',')[1];
-          result = await generateUnitFromImage(userInput, base64Data, imageToProcess.file.type);
+          result = await generateUnitFromImage(userInput, base64Data, imageToProcess.file.type, isAutoFixEnabled);
       } else {
-          result = await generateUnit(userInput);
+          const audioPayload = audioToProcess ? {
+              dataUrl: audioToProcess.dataUrl,
+              mimeType: audioToProcess.file.type
+          } : undefined;
+          result = await generateUnit(userInput, audioPayload, existingUnitNames, isAutoFixEnabled);
       }
       
       if (result) {
@@ -134,7 +160,7 @@ const App: React.FC = () => {
 
         const aiResponseMessage: ChatMessage = {
             role: 'ai',
-            content: `I've generated the '${result.unitName}' unit and added it to your mod! You can describe another unit, upload another image, or download the mod folder.`,
+            content: `I've generated the '${result.unitName}' unit and added it to your mod! You can describe another unit, upload another attachment, or download the mod folder.`,
         };
         setChatHistory(prev => [...prev, aiResponseMessage]);
       } else {
@@ -145,7 +171,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [userInput, isLoading, selectedImage, currentMod]);
+  }, [userInput, isLoading, selectedImage, selectedAudio, currentMod, isAutoFixEnabled]);
   
   const handleEditCode = useCallback(async (instruction: string) => {
     if (!instruction.trim() || !latestUnit || !currentMod || isLoading) return;
@@ -155,7 +181,8 @@ const App: React.FC = () => {
     setIsLoading(true);
 
     try {
-        const updatedCode = await editCodeWithGemini(latestUnit.iniFile.content, instruction);
+        const existingUnitNames = currentMod.units.map(u => u.unitName);
+        const updatedCode = await editCodeWithGemini(latestUnit.iniFile.content, instruction, existingUnitNames, isAutoFixEnabled);
 
         // Update the latest unit in the mod state
         const updatedUnit = { ...latestUnit, iniFile: { ...latestUnit.iniFile, content: updatedCode } };
@@ -173,7 +200,7 @@ const App: React.FC = () => {
     } finally {
         setIsLoading(false);
     }
-}, [latestUnit, currentMod, isLoading]);
+}, [latestUnit, currentMod, isLoading, isAutoFixEnabled]);
 
  const handleUpdateModName = useCallback(async () => {
     if (!modNameInput.trim() || !currentMod || isLoading) return;
@@ -209,12 +236,14 @@ const App: React.FC = () => {
         return;
     }
 
-    // Add mod-info.ini
-    const modInfoContent = `[core]
-name: ${currentMod.name}
+    // Add mod-info.txt
+    const modInfoContent = `[mod]
+title: ${currentMod.name}
 description: A custom mod generated by the Rusted Warfare Auto-Coder.
+version: 1.0
+minVersion: 1.14
 `;
-    modFolder.file('mod-info.ini', modInfoContent.trim());
+    modFolder.file('mod-info.txt', modInfoContent.trim());
 
     // Add each unit in its own folder
     currentMod.units.forEach(unit => {
@@ -229,6 +258,15 @@ description: A custom mod generated by the Rusted Warfare Auto-Coder.
                     unitFolder.file(image.name, blob);
                 }
             });
+             // Add sound files
+            if (unit.sounds) {
+                unit.sounds.forEach(sound => {
+                    const blob = dataURLtoBlob(sound.dataUrl);
+                    if (blob) {
+                        unitFolder.file(sound.name, blob);
+                    }
+                });
+            }
         }
     });
 
@@ -302,6 +340,27 @@ description: A custom mod generated by the Rusted Warfare Auto-Coder.
                     )}
                 </div>
              )}
+            <div className="flex items-center gap-2" title="When enabled, the AI will automatically correct generated code for common errors.">
+                <label htmlFor="auto-fix-toggle" className="text-sm font-medium text-gray-300 cursor-pointer select-none">
+                    Auto-Fix
+                </label>
+                <button
+                    id="auto-fix-toggle"
+                    role="switch"
+                    aria-checked={isAutoFixEnabled}
+                    onClick={() => setIsAutoFixEnabled(prev => !prev)}
+                    className={`${
+                        isAutoFixEnabled ? 'bg-cyan-500' : 'bg-gray-600'
+                    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900`}
+                >
+                    <span
+                        aria-hidden="true"
+                        className={`${
+                            isAutoFixEnabled ? 'translate-x-5' : 'translate-x-0'
+                        } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    />
+                </button>
+            </div>
             <button
                 onClick={handleDownload}
                 disabled={!canDownload}
@@ -331,6 +390,9 @@ description: A custom mod generated by the Rusted Warfare Auto-Coder.
             onImageSelect={handleImageSelect}
             onImageRemove={handleImageRemove}
             selectedImagePreview={selectedImage?.dataUrl ?? null}
+            onAudioSelect={handleAudioSelect}
+            onAudioRemove={handleAudioRemove}
+            selectedAudioPreview={selectedAudio?.dataUrl ?? null}
           />
         </div>
 

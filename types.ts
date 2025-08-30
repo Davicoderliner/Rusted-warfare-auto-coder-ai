@@ -3,6 +3,7 @@ export interface ChatMessage {
     role: 'user' | 'ai';
     content: string;
     imageUrl?: string;
+    audioUrl?: string;
 }
 
 export interface GeneratedUnit {
@@ -13,6 +14,10 @@ export interface GeneratedUnit {
         content: string;
     };
     images: {
+        name: string;
+        dataUrl: string;
+    }[];
+    sounds?: {
         name: string;
         dataUrl: string;
     }[];
